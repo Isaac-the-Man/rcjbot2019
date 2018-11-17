@@ -129,8 +129,10 @@ def scan_direction(img, midpoint_coords):
     else:
         direction = np.arctan(np.mean(np_scanned_slopes))
 
-    return shift, direction, np_scanned_slopes
+    # correct the direction to start from midline
+    direction = ((np.pi/2) - abs(direction))*(1 if direction >= 0 else -1)
 
+    return shift, direction, np_scanned_slopes
 
 # the main pipline
 def process(input_img):
@@ -163,7 +165,9 @@ def process(input_img):
         print('{} : {} | {} : {}'.format(x1,y1,x2,y2))
         cv2.line(input_img,(x1,y1),(x2,y2),(255,0,0),5)
 
-    return input_img, blurred_img
+    # return every img from each step for debug
+    img_bundle = [input_img, grey_img, threshed_img, ROI_img, blurred_img]
+    return shift, direction, img_bundle
 
 
 def main():
@@ -176,10 +180,15 @@ def main():
     raw_img = cv2.imread(path)
     scaled_img = scale_img(raw_img.copy(), scale)
 
-    output_img, blurred_img = process(scaled_img)
+    # process the img for direction and shift
+    _,_,output_bundle = process(scaled_img)
 
-    cv2.imshow('frame', output_img)
-    cv2.imshow('frame2', blurred_img)
+    # print every img
+    name = 'input_img,grey_img,threshed_img,ROI_img,blurred_img'.split(',')
+    counter = 0
+    for img in output_bundle:
+        cv2.imshow(name[counter], img)
+        counter += 1
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
