@@ -5,6 +5,7 @@ video_test.py utilizes video stream to test various kernel under development
 # import essentials
 import cv2
 import line_kernel
+import time
 
 # Define hyperparameters here
 VID_WIDTH = 640
@@ -20,6 +21,7 @@ def main():
     vid.set(cv2.CAP_PROP_FPS, VID_FPS)        # framerate
 
     while True:
+        strt_t = time.time()
         _, frame = vid.read()      # read out the frame
         _,_,output_bundle = line_kernel.process(frame)
 
@@ -27,6 +29,9 @@ def main():
         cv2.imshow('output', output_bundle[0])
         if cv2.waitKey(1) & 0xFF is ord('q'):       # waiting for the user to quit
             break
+        end_t = time.time()
+        print('time per frame: {}'.format(end_t - strt_t))
+
     vid.release()
     cv2.destroyAllWindows()
 
