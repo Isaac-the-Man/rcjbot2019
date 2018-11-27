@@ -13,7 +13,7 @@ import numpy as np
 import argparse
 
 #  Define hyperparameters here
-THRESHED_LOW = 85
+THRESHED_LOW = 33
 THRESHED_HIGH = 255
 ROI_X_OFFSET = 1/10
 ROI_Y_OFFSET = 1/3
@@ -22,10 +22,12 @@ MIN_LINE_WIDTH = 25     # in terms of pixels
 MIN_LINE_VALUE = 150        # 0 ~ 255
 SCAN_INIT_Y = 97/100      # portion of height
 SCAN_INTERVAL = 1/30      # portion of height
-SCAN_COUNT = 15
+SCAN_COUNT = 20
 AVG_SLOPE_COUNT = 3
 MIN_HORIZONTAL_WIDTH = 1/6      # portion of width
 SLOPE_EPSIOLON = 0.000001       # prevent zero division error
+HSV_MIN = (47,87,44)
+HSV_MAX = (101,255,255)
 
 # Define Constants here
 COLOR_RED = (0,0,255)
@@ -162,7 +164,14 @@ The classification for the following case:
     1. purely left or right -> end, left or right
     2. intersection(T) -> end, both (requires green tile analysis)
     3. intersection(cross) -> no end, both (requires green tile analysis)
-    4. branch left or right -> no end, lef or rights
+    4. branch left or right -> no end, lef or right
+Anaylsis steps:
+    1. For left or right:
+        horizontal_x - previous_point_x, if larger than a certain value -> left or right
+    2. For end or no end:
+        check if there is a next point -> end or no end
+    3. presence of green tile:
+        hsv color space
 '''
 # detects sharp turns (ninety degrees angle and intersection)
 def scan_horizontals(img, scanned_lines):
@@ -201,12 +210,33 @@ def scan_horizontals(img, scanned_lines):
 
     return scanned_lines, insert_key
 
+# # identify the special turning cases
+# def scan_case(scanned_lines, h_key):
 
+# def get green tile coordinate
+def scan_green(hsv_img):
+    green_img = cv2.inRange(hsv_img, HSV_MIN, HSV_MAX)        # mask out the green tiles
+    green_ROI_img = get_ROI(green_img.copy())
+
+    # calculate moments of binary image
+    M = cv2.moments(green_ROI_img)
+
+    # calculate x,y coordinate of center
+    cX = int(M["m10"] / M["m00"])
+    cY = int(M["m01"] / M["m00"])
+
+    return green_ROI_img, cX, cY
 
 # the main pipline
 def process(input_img):
     # get the geometry
     height, width = get_geometry(input_img)
+
+    # get hsv color space for green tiles detection
+    hsv_img = cv2.cvtColor(input_img.copy(), cv2.COLOR_BGR2HSV)
+    hsv_ROI_img, cX, cY = scan_green(hsv_img.copy())
+    # highlight the center
+    cv2.circle(input_img, (cX, cY), 10, COLOR_VIOLET, 5)
 
     # cvt to grey than threshold, then get the ROI and blur it
     grey_img = cv2.cvtColor(input_img.copy(), cv2.COLOR_BGR2GRAY)
@@ -223,6 +253,15 @@ def process(input_img):
     new_scanned_lines, horizontal_key = scan_horizontals(input_img, scanned_lines.copy())
     print ('Horizontal Key: {}'.format(horizontal_key))
     print('horizontal scanned: {}'.format(len(scanned_lines) - len(new_scanned_lines)))
+
+    # show lines without horizontal
+    no_h_img = input_img.copy()
+    for lines in scanned_lines:
+        lines_x = lines[0]
+        lines_y = lines[1]
+        print('Midpoints: {},{}'.format(lines_x,lines_y))
+        cv2.line(no_h_img,(0,lines_y),(width,lines_y),COLOR_RED,5)
+        cv2.circle(no_h_img,(lines_x,lines_y),5,COLOR_VIOLET,-1)
 
     # show lines
     counter = 0
@@ -245,7 +284,7 @@ def process(input_img):
         cv2.line(input_img,(x1,y1),(x2,y2),COLOR_BLUE,5)
 
     # return every img from each step for debug
-    img_bundle = [input_img, grey_img, threshed_img, ROI_img, blurred_img]
+    img_bundle = [input_img, grey_img, threshed_img, ROI_img, blurred_img, hsv_img, hsv_ROI_img, no_h_img]
     return shift, direction, img_bundle
 
 
@@ -263,7 +302,7 @@ def main():
     _,_,output_bundle = process(scaled_img)
 
     # print every img
-    name = 'input_img,grey_img,threshed_img,ROI_img,blurred_img'.split(',')
+    name = 'input_img,grey_img,threshed_img,ROI_img,blurred_img,hsv_img,hsv_ROI_img,no_h_img'.split(',')
     counter = 0
     for img in output_bundle:
         cv2.imshow(name[counter], img)
